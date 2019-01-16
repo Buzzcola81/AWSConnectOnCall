@@ -1,0 +1,288 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "Template for deploying oncall resources.",
+
+  "Parameters" : {
+    "DynamoDBTableName" : {
+      "Type" : "String",
+      "Default" : "ConnectOnCallRoster",
+      "Description" : "Enter in dynamodb Table name"
+    },
+    "SMSSenderId" : {
+      "Type" : "String",
+      "Default" : "OnCall",
+      "MinLength" : "1",
+      "MaxLength" : "11",
+      "AllowedPattern" : "^[a-zA-Z0-9]*$",
+      "Description" : "SMS Sender ID. Note: Can only be a string of 11 characters."
+    },
+    "RotateOncallFileKey" : {
+      "Type" : "String",
+      "Default" : "functions/rotateoncall.zip",
+      "Description" : "Key location of zip file for Lambda function in S3 bucket"
+    },
+    "GetOncallFileKey" : {
+      "Type" : "String",
+      "Default" : "functions/getoncall.zip",
+      "Description" : "Key location of zip file for Lambda function in S3 bucket"
+    },
+    "BuildVersion" : {
+      "Type" : "String",
+      "Default" : "somebuildid",
+      "Description" : "used for lambda function"
+    }
+  },
+  
+  "Resources" : {
+
+    "OnCallDynamoDBTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": "5",
+          "WriteCapacityUnits": "5"
+        },
+        "TableName": {
+          "Ref": "DynamoDBTableName"
+        }
+      }
+    },
+    "ScheduledRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "ScheduledRule",
+        "ScheduleExpression": "cron(0 0 ? * MON *)",
+        "State": "ENABLED",
+        "Targets": [{
+          "Arn": { "Fn::GetAtt": ["rotateoncall", "Arn"] },
+          "Id": "TargetFunctionV1"
+        }]
+      }
+    },
+    "PermissionForEventsToInvokeRotateOnCallLambda": {
+      "DependsOn": "rotateoncall",
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": { "Ref": "rotateoncall" },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": { "Fn::GetAtt": ["ScheduledRule", "Arn"] }
+      }
+    },
+    "rotateoncall": {
+      "DependsOn": [
+        "LambdaRotateOnCallExecutionRole"
+      ],
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "index.handler",
+        "Runtime": "nodejs8.10",
+        "Role": { "Fn::GetAtt" : [ "LambdaRotateOnCallExecutionRole", "Arn" ] },
+        "FunctionName": "rotateoncall",
+        "MemorySize": 256,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "SMSSenderId": {
+              "Ref": "SMSSenderId"
+            },
+            "DynamoDBTableName": {
+              "Ref": "DynamoDBTableName"
+            }
+          }
+        },
+        "Code": {
+          "S3Bucket" : { "Fn::ImportValue": "ConnectOnCallS3Bucket" },
+          "S3Key" : { "Ref": "RotateOncallFileKey" }
+        }
+      }
+    },
+    "LambdaRotateOnCallExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": ["lambda.amazonaws.com"]
+              },
+              "Action": ["sts:AssumeRole"]
+            }
+          ]
+        },
+        "Path": "/"
+      }
+    },
+    "LambdaRotateOnCallExecutionPolicy": {
+      "DependsOn": [
+        "LambdaRotateOnCallExecutionRole"
+      ],
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "LambdaRotateOnCallRolePolicy",
+        "Roles": [
+          {"Ref": "LambdaRotateOnCallExecutionRole"}
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sns:Publish",
+                "sns:SetSMSAttributes",
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:Scan",
+                "dynamodb:UpdateItem"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "", [
+                    "arn:aws:dynamodb:",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":table/",
+                    {
+                      "Ref": "DynamoDBTableName"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "PermissionForAWSConnectToInvokeGetOnCallLambda": {
+      "DependsOn": "getoncall",
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": { "Ref": "getoncall" },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "connect.amazonaws.com",
+        "SourceAccount": { "Ref": "AWS::AccountId" }
+      }
+    },
+    "getoncall": {
+      "DependsOn": [
+        "LambdaGetOnCallExecutionRole"
+      ],
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "index.handler",
+        "Runtime": "nodejs8.10",
+        "Role": { "Fn::GetAtt" : [ "LambdaGetOnCallExecutionRole", "Arn" ] },
+        "FunctionName": "getoncall",
+        "MemorySize": 256,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "DynamoDBTableName": {
+              "Ref": "DynamoDBTableName"
+            }
+          }
+        },
+        "Code": {
+          "S3Bucket" : { "Fn::ImportValue": "ConnectOnCallS3Bucket" },
+          "S3Key" : { "Ref": "GetOncallFileKey" }
+        }
+      }
+    },
+    "LambdaGetOnCallExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": ["lambda.amazonaws.com"]
+              },
+              "Action": ["sts:AssumeRole"]
+            }
+          ]
+        },
+        "Path": "/"
+      }
+    },
+    "LambdaGetOnCallExecutionPolicy": {
+      "DependsOn": [
+        "LambdaGetOnCallExecutionRole"
+      ],
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "LambdaGetOnCallRolePolicy",
+        "Roles": [
+          {"Ref": "LambdaGetOnCallExecutionRole"}
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:Scan"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "", [
+                    "arn:aws:dynamodb:",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":table/",
+                    {
+                      "Ref": "DynamoDBTableName"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

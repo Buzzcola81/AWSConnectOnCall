@@ -1,0 +1,21 @@
+{
+  "name": "getoncall",
+  "version": "1.0.0",
+  "description": "Lambda Function to return oncall users from the DynamoDB Table to Amazon Connect",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.334.0"
+  },
+  "devDependencies": {
+    "babel-minify": "^0.5.0",
+    "eslint": "^5.7.0",
+    "eslint-config-airbnb-base": "^13.1.0",
+    "eslint-plugin-import": "^2.14.0",
+    "jest": "^23.6.0"
+  },
+  "scripts": {
+    "test": "echo \"Info: no test defined as this is a simple function - Passed\" && exit 0"
+  },
+  "author": "Martin Sustaric",
+  "license": "ISC"
+}

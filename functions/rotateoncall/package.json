@@ -1,0 +1,21 @@
+{
+  "name": "rotateoncall",
+  "version": "1.0.0",
+  "description": "Lambda Function to rotate oncall users in the DynamoDB Table and notify primary engineer they are on call",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "author": "Martin Sustaric",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.334.0"
+  },
+  "devDependencies": {
+    "babel-minify": "^0.5.0",
+    "eslint": "^5.7.0",
+    "eslint-config-airbnb-base": "^13.1.0",
+    "eslint-plugin-import": "^2.14.0",
+    "jest": "^23.6.0"
+  }
+}

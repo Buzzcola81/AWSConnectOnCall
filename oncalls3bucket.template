@@ -1,0 +1,32 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "Template for deploying oncall s3 bucket.",
+
+  "Parameters" : {
+    "S3Bucket" : {
+      "Type" : "String",
+      "Default" : "datacomconnectoncall",
+      "Description" : "S3 Bucket used to store Lambda zip files"
+    }
+  },
+  
+  "Resources" : {
+
+    "s3bucket" : {
+      "Type" : "AWS::S3::Bucket",
+      "Properties" : {
+        "BucketName" : { "Ref": "S3Bucket" }
+      }
+    }
+  },
+
+  "Outputs" : {
+    "ConnectOnCallS3Bucket" : {
+      "Value" : { "Ref" : "S3Bucket" },
+      "Export" : {
+        "Name" : "ConnectOnCallS3Bucket"
+      }
+    }
+  }
+}
